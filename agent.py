@@ -224,7 +224,7 @@ def react_agent_system(query: str, doc_name: str, max_iterations=5):
 
 
 if __name__ == "__main__":
-    test_query = "各模型在 SWE-rebench的表现如何"
+    test_query = "文中有提到progressive and disclosure吗？"
 
     # ⚠️ 提示：在你的 utils.py 中，它会自动加上 "_structure.json" 的后缀
     # 所以如果你本地的文件名是 "GLM5-report_structure.json"，这里只需传入 "GLM5-report"
