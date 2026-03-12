@@ -1,53 +1,64 @@
 # pageIndex-rag-chat
-基于 pageIndex 以ReAct范式构建的 Agentic RAG Web UI 系统，可视化文档检索与推理过程，效果还原度 95%+。
+An Agentic RAG Web UI system built on the ReAct paradigm with PageIndex, visualizing the document retrieval and reasoning process with over 95% effect 还原度 (effect reproduction rate).
 
+[![ 简体中文](https://img.shields.io/badge/-简体中文-red.svg)](/README_zh.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-![效果对比 1](pic/img_1.png)
+## Compared with the official website
 
-![效果对比 2](pic/img.png)
+![效果对比 1](pic/img1.png)
+
+![效果对比 2](pic/img2.png)
+official
+![效果对比 3](pic/img3.png)
+
+## Quick Start
+```
+dependencies:
+pip install -r requirements.txt
+
+start the service
+python main.py
+```
 
 
-## ✨ 核心特性
-- 🚀 **fastapi**：服务基于fastapi构建，可加入到自己的应用中
-- 🗺️ **大纲驱动导航**：摒弃盲向量匹配，Agent 读取全局大纲，基于逻辑关联精准定位目标章节
-- 🕵️‍♂️ **ReAct 思考引擎**：赋予模型自主决策能力，按需加载内容，大幅降低 Token 开销
-- ⚖️ **动态评估反思**：提取文本后自动评估有效性，动态构建高质量局部知识库，过滤无关噪音
-- 🔌 **极简即插即用**：原生适配 PageIndex 输出的 `_structure.json` 格式，轻量开箱，兼容各类 OpenAI 兼容 API
+## ✨ Core Features
+- 🚀 **FastAPI-Powered**: The service is built on FastAPI, easily integrable into your own applications
+- 🗺️ **TOC-Driven Navigation**: Abandon blind vector matching; the Agent reads the global outline and accurately locates target chapters based on logical relevance
+- 🕵️‍♂️ **ReAct Thinking Engine**: Empowers the model with autonomous decision-making capabilities, loading content on demand to significantly reduce Token consumption
+- ⚖️ **Dynamic Evaluation & Reflection**: Automatically assesses the validity of extracted text, dynamically builds a high-quality local knowledge base, and filters out irrelevant noise
+- 🔌 **Plug & Play Simplicity**: Natively adapts to the `_structure.json` format output by PageIndex, lightweight and ready-to-use, compatible with all OpenAI-compatible APIs
 
-注意：本项目对于pageIndex核心代码进行了修改，适配兼容openai的接口,在.env中配置(原项目只支持chatgpt-api)
+Note: The core PageIndex code in this project has been modified to adapt to OpenAI-compatible interfaces, configured in the .env file (the original project only supports the ChatGPT API)
 ```text
 .env
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=model_name
 OPENAI_BASE_URL=base_url
-
+## 🛠️Core Architecture
+User Query 
+   │
+   ▼
+[Load Document Outline (TOC)] ──────┐
+   │                                 │
+   ▼                                 ▼
+Thought-Agent ◄──────────────── [Current Knowledge Base]
+   │ (Autonomously decide next action)      ▲
+   ▼                                       │
+Call Tool (get_texts)                      │
+   │                                       │
+   ▼                                       │
+Judge-Agent ───────────────────────────────┘
+  (Evaluate result validity and summarize experience)
+   │
+   ▼ (Triggered when sufficient information is collected)
+Call Tool (get_answer) 
+   │
+   ▼
+Generate Final Answer
 ```
-## 🛠️ 核心架构
-```text
-用户查询
-   │
-   ▼
-[加载文档大纲 TOC] ──────┐
-   │                       │
-   ▼                       ▼
-Thought-Agent ◄───── [当前知识库]
-   │ (自主决策下一步行动)      ▲
-   ▼                       │
-调用工具 (get_texts)       │
-   │                       │
-   ▼                       │
-Judge-Agent ───────────────┘
-  (评估结果有效性，总结经验)
-   │
-   ▼ (信息足够时触发)
-调用工具 (get_answer)
-   │
-   ▼
-生成最终回答
-
-## 📌 待办清单
-1. 支持多文档问答能力
-2. 封装为 MCP 接口
-3. 集成数据库存储能力
-4. 对接 Ollama/VLLM，实现本地全量部署
+## 📌 Todo List
+- [ ] Support multi-document Q&A capabilities
+- [ ] Package as MCP interface
+- [ ] Integrate database storage capabilities
+- [ ] Connect to Ollama/VLLM to achieve full local deployment
