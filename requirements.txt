@@ -1,2 +1,5 @@
 openai
 dotenv
+fastapi
+json
+uvicorn

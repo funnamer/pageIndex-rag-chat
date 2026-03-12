@@ -52,7 +52,7 @@ def get_structure(doc_name: str) -> List[Dict[str, Any]]:
         return filtered_item
     
     # 构建文件路径
-    data_dir = Path(__file__).parent / "data"
+    data_dir = Path(__file__).parent / "results"
     structure_file = data_dir / f"{doc_name}_structure.json"
     
     # 读取 JSON 文件
@@ -111,7 +111,7 @@ def get_texts_by_node_ids(doc_name: str, node_ids: List[int]) -> List[Dict[str, 
         return None
     
     # 构建文件路径
-    data_dir = Path(__file__).parent / "data"
+    data_dir = Path(__file__).parent / "results"
     structure_file = data_dir / f"{doc_name}_structure.json"
     
     # 读取 JSON 文件

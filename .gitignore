@@ -3,3 +3,4 @@
 .logs/
 .results/
 .gitignore
+.DS_Store
