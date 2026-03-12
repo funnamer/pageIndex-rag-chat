@@ -19,7 +19,7 @@ pip install -r requirements.txt
 start the service
 python main.py
 ```
-
+visit http://127.0.0.1:8000/
 
 ## ✨ Core Features
 - 🚀 **FastAPI-Powered**: The service is built on FastAPI, easily integrable into your own applications

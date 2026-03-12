@@ -1,7 +1,25 @@
+# 环境变量文件（敏感配置，必忽略）
 .env
+
+# IDE 配置文件（JetBrains 系列：PyCharm/IntelliJ 等）
 .idea/
+
+# 日志文件夹（注意：你的原写法是.logs/，确认是带点的文件夹名）
 .logs/
-.results/
-.gitignore
+
+# 结果输出文件夹（整文件夹忽略）
+results/
+
+# Mac 系统自动生成的隐藏文件
 .DS_Store
-.__pycache__/
+
+# Python 编译缓存（标准写法，覆盖所有__pycache__文件夹）
+__pycache__/
+# 兜底：忽略所有.pyc编译文件（防止单个文件未被忽略）
+*.pyc
+
+# 可选补充：如果有虚拟环境/依赖文件，也建议忽略
+# venv/
+# .venv/
+# requirements.txt.bak
+# *.egg-info/
