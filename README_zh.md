@@ -1,9 +1,9 @@
-# 🚀 PageIndex-Reasoner
+# 🚀 pageIndex-rag-chat
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-**PageIndex 缺失的推理引擎！基于目录大纲 (TOC) 导航与 Thought-Judge 双层反思机制的 Agentic RAG 开源实现。**
+**基于 ReAct 范式构建的 Agentic RAG Web UI 系统，可视化文档的检索与推理过程**
 
 ## 💡 为什么做这个项目？
 

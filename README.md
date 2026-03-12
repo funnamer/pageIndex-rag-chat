@@ -2,12 +2,12 @@
   <strong>English</strong> | <a href="README_zh.md">简体中文</a>
 </div>
 
-# 🚀 PageIndex-Reasoner
+# 🚀 pageIndex-rag-chat
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-**The missing reasoning engine for PageIndex! An open-source Agentic RAG implementation based on TOC (Table of Contents) navigation and a Thought-Judge dual-agent reflection mechanism.**
+**A complete RAG Chat Web UI system built on PageIndex! Powered by the ReAct paradigm, it combines TOC (Table of Contents) navigation with an explicit reasoning process for an intelligent and transparent document Q&A experience.**
 
 ## 💡 Why this project?
 

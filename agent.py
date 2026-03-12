@@ -10,21 +10,21 @@ from utils import get_structure as fetch_structure, get_texts_by_node_ids
 
 # 1. 初始化客户端 (使用百炼 DashScope)
 client = OpenAI(
-    api_key=os.environ.get("DASHSCOPE_API_KEY", "你的阿里云API-KEY"),
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    api_key=os.environ.get("OPENAI_API_KEY"),
+    base_url=os.environ.get("OPENAI_BASE_URL"),
 )
 
 
 # ---------------- 核心 LLM 调用 ----------------
 def call_qwen(prompt: str, is_final: bool = False) -> str:
-    """调用 qwen3-plus 模型。is_final 控制系统提示词"""
+    """调用 qwen3 模型。is_final 控制系统提示词"""
     try:
-        sys_prompt = "你是一个严谨的AI助手，请严格按照要求的XML标签格式输出，不要输出任何多余的寒暄或解释。"
+        sys_prompt = "你是一个严谨的 AI 助手，请严格按照要求的 XML 标签格式输出，不要输出任何多余的寒暄或解释。"
         if is_final:
-            sys_prompt = "你是一个专业的AI助手，请根据提供的上下文，准确、详细地回答用户的问题。"
+            sys_prompt = "你是一个专业的 AI 助手，请根据提供的上下文，准确、详细地回答用户的问题。"
 
         response = client.chat.completions.create(
-            model="qwen3-max",
+            model=os.environ.get("OPENAI_MODEL", "qwen3-max"),
             messages=[
                 {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": prompt}
@@ -33,15 +33,12 @@ def call_qwen(prompt: str, is_final: bool = False) -> str:
         )
         return response.choices[0].message.content
     except Exception as e:
-        print(f"❌ [LLM API 调用失败]: {e}")
-        return ""
+        return f"LLM_ERROR: {e}"
 
 
 # ---------------- 工具与执行器 ----------------
 def execute_tool(tool_name: str, parameters_str: str, doc_name: str) -> str:
     """真实环境执行器：调用 utils.py 中的工具"""
-    print(f"  🔧 [Executor] 正在执行: {tool_name}, 参数: {parameters_str}, 文档: {doc_name}")
-
     params = {}
     if parameters_str.strip():
         try:
@@ -50,7 +47,6 @@ def execute_tool(tool_name: str, parameters_str: str, doc_name: str) -> str:
             return f"系统报错: 提供的参数不是合法的 JSON 格式: {parameters_str}"
 
     try:
-        # 注意：这里去掉了 get_structure 工具，只保留了 get_texts
         if tool_name == "get_texts":
             node_ids = params.get("node_ids", [])
             if not isinstance(node_ids, list):
@@ -59,7 +55,6 @@ def execute_tool(tool_name: str, parameters_str: str, doc_name: str) -> str:
             node_ids = [int(n) for n in node_ids]
             result = get_texts_by_node_ids(doc_name, node_ids)
             return json.dumps(result, ensure_ascii=False)
-
         else:
             return f"系统报错: 找不到名为 '{tool_name}' 的工具，请检查工具名称。"
 
@@ -78,32 +73,33 @@ def parse_tags(text: str, tags: list) -> dict:
     return result
 
 
-# ---------------- 核心 Agent 逻辑 ----------------
-def react_agent_system(query: str, doc_name: str, max_iterations=5):
+# ---------------- 核心 Agent 逻辑 (生成器重构版) ----------------
+def react_agent_system_stream(query: str, doc_name: str, max_iterations=5):
+    """
+    重构为 Generator，通过 yield 返回每一步的状态，供 Web UI 实时渲染。
+    返回的数据结构统一为: {"type": "xxx", "content": "xxx", ...其他字段}
+    """
     knowledge_base = []
-    useful_node_ids = set()  # 全局存储有用的 node_id，使用 set 去重
+    useful_node_ids = set()
 
-    print(f"\n{'=' * 50}")
-    print(f"🎯 收到任务 Query: {query}")
-    print(f"📄 目标文档: {doc_name}")
-    print(f"{'=' * 50}\n")
+    # 通知前端：任务开始
+    yield {"type": "status", "content": f"🎯 开始处理 Query: '{query}' | 目标文档: '{doc_name}'"}
 
-    # ---------------- 1. 初始化：预先获取并加载大纲 ----------------
-    print("📚 [系统] 正在提取并加载文档全局大纲...")
+    # 1. 初始化：预先获取并加载大纲
+    yield {"type": "status", "content": "📚 正在提取并加载文档全局大纲..."}
     try:
         raw_structure = fetch_structure(doc_name)
         structure_context = json.dumps(raw_structure, ensure_ascii=False)
-        print("📚 [系统] 大纲加载完毕。")
+        yield {"type": "status", "content": "✅ 大纲加载完毕。"}
     except Exception as e:
-        print(f"❌ [系统报错] 无法获取文档大纲: {e}")
-        return "初始化失败"
+        yield {"type": "error", "content": f"无法获取文档大纲: {e}"}
+        return
 
     for i in range(max_iterations):
-        print(f"🔄 --- [Iteration {i + 1}/{max_iterations}] ---")
+        yield {"type": "step", "content": f"🔄 --- [Iteration {i + 1}/{max_iterations}] ---"}
 
         kb_text = "\n".join([f"{idx + 1}. {item}" for idx, item in enumerate(knowledge_base)])
         if not kb_text:
-            # 第一次执行的提示词改变：引导它直接看大纲并使用 get_texts
             kb_text = "暂无执行记录。你是第一次执行，请先仔细阅读上方提供的【文档大纲】，寻找与用户问题相关的 node_id，并调用 get_texts 获取文本。"
 
         thought_prompt = f"""你是一个具备逻辑推理能力的智能助手 (Thought-Agent)。
@@ -128,6 +124,9 @@ def react_agent_system(query: str, doc_name: str, max_iterations=5):
 <parameter>传递给工具的 JSON 格式参数(如无参数则留空)</parameter>
 """
 
+        # 通知前端：Thought-Agent 正在思考
+        yield {"type": "status", "content": "🧠 思考引擎正在分析当前进度..."}
+
         thought_response = call_qwen(thought_prompt)
         t_parsed = parse_tags(thought_response, ["think", "tool", "parameter"])
 
@@ -135,42 +134,44 @@ def react_agent_system(query: str, doc_name: str, max_iterations=5):
         t_tool = t_parsed.get("tool", "无工具")
         t_param = t_parsed.get("parameter", "")
 
-        print(f"🧠 [Thought-Agent]")
-        print(f"   ► 思考 (Think): {t_think}")
-        print(f"   ► 决策 (Tool):  {t_tool}")
-        print(f"   ► 参数 (Param): {t_param}")
+        # 【核心外显 1】把 Thought-Agent 的思考过程丢给前端
+        yield {
+            "type": "thought",
+            "think": t_think,
+            "tool": t_tool,
+            "param": t_param
+        }
 
         # ---------------- 最终答案生成逻辑 ----------------
         if t_tool == "get_answer":
             if not useful_node_ids:
-                return "未能收集到任何有用的文档信息，无法给出答案。"
+                yield {"type": "error", "content": "未能收集到任何有用的文档信息，无法给出答案。"}
+                return
 
-            print(f"\n🚀 [准备答复] 正在提取所有有用节点 {list(useful_node_ids)} 的内容进行最终总结...")
+            yield {"type": "status",
+                   "content": f"🚀 正在组装所有高价值节点 {list(useful_node_ids)} 的内容进行最终总结..."}
 
             final_context_data = get_texts_by_node_ids(doc_name, list(useful_node_ids))
             final_context_str = json.dumps(final_context_data, ensure_ascii=False)
 
-            # ========== 🚀 加这两行调试代码 ==========
-            print(f"\n[Debug] 最终组装的文本长度: {len(final_context_str)}")
-            print(f"[Debug] 最终文本预览:\n{final_context_str[:300]}...\n")
-            # ========================================
-
-            # 建议稍微放宽最终的 Prompt，允许大模型进行中英文意译
             final_prompt = f"""请基于以下检索到的文档内容，详细回答用户的问题。
-        文档可能是英文的，请自动翻译并总结。如果检索到的内容完全与问题无关，再说明“文档中未提及”。
+文档可能是英文的，请自动翻译并总结。如果检索到的内容完全与问题无关，再说明“文档中未提及”。
 
-        【用户问题】
-        {query}
+【用户问题】
+{query}
 
-        【文档提取内容】
-        {final_context_str}
-        """
-            # 3. 调用 LLM 生成最终答案
+【文档提取内容】
+{final_context_str}
+"""
+            yield {"type": "status", "content": "✍️ 正在生成最终回答，请稍候..."}
             final_answer = call_qwen(final_prompt, is_final=True)
-            print(f"\n✅ [任务完成] 最终答案:\n{final_answer}\n")
-            return final_answer
+
+            # 【核心外显 2】输出最终答案
+            yield {"type": "final_answer", "content": final_answer}
+            return
 
         # ---------------- 执行与评估逻辑 ----------------
+        yield {"type": "status", "content": f"🔧 正在执行工具: {t_tool} ..."}
         exec_result = execute_tool(t_tool, t_param, doc_name)
 
         judge_prompt = f"""你是一个评估专家 (Judge-Agent)。你的任务是评估 Thought-Agent 上一步行动的有效性，并为它总结经验。
@@ -191,7 +192,7 @@ def react_agent_system(query: str, doc_name: str, max_iterations=5):
 <conclusion>有用 or 无用</conclusion>
 <summary>简明扼要地总结此次行动获取到的核心信息。内容里包含什么信息，是否能回答Thought-Agent思考的内容</summary>
 """
-
+        yield {"type": "status", "content": "⚖️ 评估专家正在检验工具执行结果..."}
         judge_response = call_qwen(judge_prompt)
         j_parsed = parse_tags(judge_response, ["think", "conclusion", "summary"])
 
@@ -199,35 +200,25 @@ def react_agent_system(query: str, doc_name: str, max_iterations=5):
         j_conclusion = j_parsed.get("conclusion", "无用")
         j_summary = j_parsed.get("summary", "未能生成总结")
 
-        print(f"⚖️  [Judge-Agent]")
-        print(f"   ► 评估 (Think): {j_think}")
-        print(f"   ► 结论 (Conclusion): {j_conclusion}")
-        print(f"   ► 总结 (Summary): {j_summary}")
+        # 【核心外显 3】把 Judge-Agent 的评估过程丢给前端
+        yield {
+            "type": "judge",
+            "think": j_think,
+            "conclusion": j_conclusion,
+            "summary": j_summary
+        }
 
-        # ---------------- 核心更新逻辑：收集 useful_node_ids ----------------
+        # ---------------- 核心更新逻辑 ----------------
         if "有用" in j_conclusion and t_tool == "get_texts":
             try:
                 params_dict = json.loads(t_param)
                 ids_to_add = params_dict.get("node_ids", [])
                 if isinstance(ids_to_add, list):
                     useful_node_ids.update([int(n) for n in ids_to_add])
-                    print(f"   📌 [系统笔记] 将节点 {ids_to_add} 加入最终阅读列表。")
+                    yield {"type": "status", "content": f"📌 判定为高价值信息，已将节点 {ids_to_add} 加入最终阅读列表。"}
             except Exception as e:
-                print(f"   ⚠️ [解析参数警告] 无法从参数中提取 node_ids: {e}")
+                pass  # 忽略参数解析错误，避免中断
 
-        # 每次 Judge 评估完，都将 Summary 加入知识库供下一次循环使用
         knowledge_base.append(j_summary)
-        print("-" * 50 + "\n")
 
-    print("⚠️ 达到最大循环次数 (5次)，强制终止，未能完成任务。")
-    return "未能得出结论"
-
-
-if __name__ == "__main__":
-    test_query = "文中有提到progressive and disclosure吗？"
-
-    # ⚠️ 提示：在你的 utils.py 中，它会自动加上 "_structure.json" 的后缀
-    # 所以如果你本地的文件名是 "GLM5-report_structure.json"，这里只需传入 "GLM5-report"
-    target_doc_name = "GLM5-report"
-
-    react_agent_system(test_query, target_doc_name)
+    yield {"type": "error", "content": "⚠️ 达到最大循环次数 (5次)，强制终止，未能完成任务。"}

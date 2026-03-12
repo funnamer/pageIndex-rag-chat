@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic RAG 智能问答系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .typing-indicator span { display: inline-block; width: 4px; height: 4px; background-color: #94a3b8; border-radius: 50%; margin: 0 2px; animation: typing 1s infinite alternate; }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing { 0% { transform: translateY(0); } 100% { transform: translateY(-4px); } }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen flex overflow-hidden font-sans">
+
+    <aside class="w-80 bg-slate-900 text-slate-300 flex flex-col shadow-xl z-10">
+        <div class="p-6">
+            <h1 class="text-xl font-bold text-white mb-2"><i class="fa-solid fa-robot text-blue-400 mr-2"></i>Agentic RAG</h1>
+            <p class="text-xs text-slate-400 mb-6">智能文档解析与深度推理问答</p>
+
+            <div class="mb-8">
+                <h2 class="text-sm font-semibold text-slate-200 mb-3 uppercase tracking-wider">1. 上传新文档</h2>
+                <div class="border-2 border-dashed border-slate-600 rounded-lg p-4 text-center hover:border-blue-400 transition cursor-pointer relative" onclick="document.getElementById('fileInput').click()">
+                    <i class="fa-solid fa-cloud-arrow-up text-2xl mb-2 text-slate-400"></i>
+                    <p class="text-sm">点击选择 PDF / Markdown</p>
+                    <input type="file" id="fileInput" class="hidden" accept=".pdf,.md,.markdown" onchange="handleUpload(event)">
+                </div>
+                <div id="uploadStatus" class="mt-2 text-xs hidden">
+                    <span class="text-blue-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>正在解析文档架构，请耐心等待...</span>
+                </div>
+            </div>
+
+            <div>
+                <h2 class="text-sm font-semibold text-slate-200 mb-3 uppercase tracking-wider">2. 选择对话文档</h2>
+                <select id="docSelect" class="w-full bg-slate-800 border border-slate-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none">
+                    <option value="">加载中...</option>
+                </select>
+            </div>
+        </div>
+        <div class="mt-auto p-4 border-t border-slate-800">
+            <button onclick="clearChat()" class="w-full flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-700 text-white p-2 rounded transition">
+                <i class="fa-solid fa-trash-can"></i> <span>清空对话</span>
+            </button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-full bg-white">
+        <div id="chatBox" class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="flex items-start">
+                <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                    <i class="fa-solid fa-robot text-blue-600 text-sm"></i>
+                </div>
+                <div class="bg-gray-100 text-gray-800 p-4 rounded-2xl rounded-tl-none max-w-[80%] shadow-sm">
+                    你好！请在左侧选择要对话的文档，然后向我提问。我会展示我的思考和检索过程！
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 bg-white border-t border-gray-100">
+            <div class="max-w-4xl mx-auto relative flex items-center">
+                <input type="text" id="queryInput" placeholder="输入你想问的问题，按回车发送..."
+                    class="w-full bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-4 pr-12 shadow-sm outline-none"
+                    onkeypress="if(event.key === 'Enter') sendQuery()">
+                <button onclick="sendQuery()" id="sendBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-2 transition">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // 初始化：加载可用文档列表
+        async function loadDocs() {
+            const res = await fetch('/api/docs');
+            const data = await res.json();
+            const select = document.getElementById('docSelect');
+            select.innerHTML = '';
+            if (data.docs.length === 0) {
+                select.innerHTML = '<option value="">暂无文档，请先上传</option>';
+            } else {
+                data.docs.forEach(doc => {
+                    const opt = document.createElement('option');
+                    opt.value = doc;
+                    opt.textContent = doc;
+                    select.appendChild(opt);
+                });
+            }
+        }
+        loadDocs();
+
+        // 处理文件上传
+        async function handleUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const statusEl = document.getElementById('uploadStatus');
+            statusEl.classList.remove('hidden');
+            statusEl.innerHTML = '<span class="text-blue-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>正在解析并生成结构，请稍候...</span>';
+
+            try {
+                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    statusEl.innerHTML = `<span class="text-green-400"><i class="fa-solid fa-check mr-1"></i>${data.message}</span>`;
+                    loadDocs(); // 刷新文档列表
+                } else {
+                    statusEl.innerHTML = `<span class="text-red-400"><i class="fa-solid fa-xmark mr-1"></i>${data.message}</span>`;
+                }
+            } catch (err) {
+                statusEl.innerHTML = `<span class="text-red-400">上传出现异常</span>`;
+            }
+            setTimeout(() => { statusEl.classList.add('hidden'); }, 5000);
+        }
+
+        // 清空对话
+        function clearChat() {
+            const chatBox = document.getElementById('chatBox');
+            chatBox.innerHTML = `
+            <div class="flex items-start">
+                <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                    <i class="fa-solid fa-robot text-blue-600 text-sm"></i>
+                </div>
+                <div class="bg-gray-100 text-gray-800 p-4 rounded-2xl rounded-tl-none max-w-[80%] shadow-sm">
+                    对话已清空。我们可以开始新的话题。
+                </div>
+            </div>`;
+        }
+
+        // 发送消息并流式渲染 UI
+        async function sendQuery() {
+            const input = document.getElementById('queryInput');
+            const query = input.value.trim();
+            const docName = document.getElementById('docSelect').value;
+
+            if (!query) return;
+            if (!docName) {
+                alert("请先选择或上传一份文档！");
+                return;
+            }
+
+            const chatBox = document.getElementById('chatBox');
+
+            // 1. 渲染用户气泡
+            chatBox.innerHTML += `
+            <div class="flex items-start justify-end">
+                <div class="bg-blue-600 text-white p-4 rounded-2xl rounded-tr-none max-w-[80%] shadow-md">
+                    ${query}
+                </div>
+                <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center ml-3 flex-shrink-0">
+                    <i class="fa-solid fa-user text-slate-500 text-sm"></i>
+                </div>
+            </div>`;
+            input.value = '';
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // 2. 创建 AI 回复的容器框架
+            const aiMsgId = "msg-" + Date.now();
+            // reasoningBox 包含推导过程的外显； answerBox 是最终答案
+            chatBox.innerHTML += `
+            <div class="flex items-start w-full">
+                <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0 mt-2">
+                    <i class="fa-solid fa-robot text-blue-600 text-sm"></i>
+                </div>
+                <div class="flex-1 max-w-[85%]">
+                    <details class="mb-2 group" open>
+                        <summary class="cursor-pointer text-xs font-semibold text-slate-500 bg-slate-50 px-3 py-2 rounded border border-slate-200 hover:bg-slate-100 transition list-none flex items-center">
+                            <i class="fa-solid fa-chevron-right mr-2 transition-transform group-open:rotate-90"></i>
+                            <span id="${aiMsgId}-status">Agent 启动思考引擎...</span>
+                            <span class="typing-indicator ml-2 inline-block" id="${aiMsgId}-typing"><span></span><span></span><span></span></span>
+                        </summary>
+                        <div id="${aiMsgId}-reasoning" class="mt-2 p-3 bg-slate-800 text-slate-300 text-xs rounded-lg shadow-inner font-mono overflow-x-auto space-y-2 leading-relaxed">
+                            </div>
+                    </details>
+                    <div id="${aiMsgId}-answer" class="bg-white text-gray-800 p-4 border border-gray-100 rounded-2xl rounded-tl-none shadow-sm hidden">
+                    </div>
+                </div>
+            </div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const reasoningBox = document.getElementById(`${aiMsgId}-reasoning`);
+            const statusBox = document.getElementById(`${aiMsgId}-status`);
+            const typingInd = document.getElementById(`${aiMsgId}-typing`);
+            const answerBox = document.getElementById(`${aiMsgId}-answer`);
+            const detailsBox = reasoningBox.parentElement;
+
+            // 3. 发送 Fetch 请求，读取流式数据 (SSE)
+            document.getElementById('sendBtn').disabled = true;
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, doc_name: docName })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop(); // 保留最后一个不完整的块
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.substring(6));
+
+                            // 动态渲染不同类型的卡片
+                            if (data.type === "status") {
+                                statusBox.innerText = data.content;
+                                reasoningBox.innerHTML += `<div class="text-blue-300 opacity-70">&gt; ${data.content}</div>`;
+                            }
+                            else if (data.type === "step") {
+                                reasoningBox.innerHTML += `<div class="text-yellow-400 mt-2 border-t border-slate-600 pt-2 font-bold">${data.content}</div>`;
+                            }
+                            else if (data.type === "thought") {
+                                reasoningBox.innerHTML += `
+                                    <div class="pl-2 border-l-2 border-purple-500 my-1 text-slate-200">
+                                        <div class="text-purple-400"><i class="fa-solid fa-brain"></i> 思考:</div> ${data.think}<br/>
+                                        <div class="text-green-400 mt-1"><i class="fa-solid fa-wrench"></i> 决定调用: ${data.tool}</div>
+                                        <div class="text-slate-400 italic">参数: ${data.param}</div>
+                                    </div>`;
+                            }
+                            else if (data.type === "judge") {
+                                const color = data.conclusion.includes("有用") ? "text-green-400" : "text-orange-400";
+                                reasoningBox.innerHTML += `
+                                    <div class="pl-2 border-l-2 border-blue-500 my-1 bg-slate-900 p-2 rounded">
+                                        <div class="${color}"><i class="fa-solid fa-gavel"></i> 评估: ${data.conclusion}</div>
+                                        <div class="text-slate-400 mt-1"><i class="fa-solid fa-clipboard-list"></i> 总结: ${data.summary}</div>
+                                    </div>`;
+                            }
+                            else if (data.type === "final_answer") {
+                                statusBox.innerText = "✨ 思考完成";
+                                typingInd.style.display = 'none';
+                                detailsBox.removeAttribute("open"); // 自动折叠思考过程
+                                answerBox.classList.remove('hidden');
+                                // 将换行替换为 br 标签
+                                answerBox.innerHTML = data.content.replace(/\n/g, '<br>');
+                            }
+                            else if (data.type === "error") {
+                                statusBox.innerText = "❌ 运行中断";
+                                typingInd.style.display = 'none';
+                                reasoningBox.innerHTML += `<div class="text-red-500 font-bold mt-2">错误: ${data.content}</div>`;
+                            }
+                            chatBox.scrollTop = chatBox.scrollHeight;
+                        }
+                    }
+                }
+            } catch (error) {
+                statusBox.innerText = "网络请求失败";
+                typingInd.style.display = 'none';
+            } finally {
+                document.getElementById('sendBtn').disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
