@@ -1,6 +1,5 @@
 # pageIndex-rag-chat
-An Agentic RAG Web UI system built on the ReAct paradigm with PageIndex, visualizing the document retrieval and reasoning process with over 95% effect 还原度 (effect reproduction rate).
-
+An Agentic RAG Web UI system built on the ReAct paradigm with PageIndex, visualizing the document retrieval and reasoning process(90% similarity to the original.)
 [![ 简体中文](https://img.shields.io/badge/-简体中文-red.svg)](/README_zh.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 

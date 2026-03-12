@@ -1,5 +1,5 @@
 # pageIndex-rag-chat
-基于 pageIndex 以ReAct范式构建的 Agentic RAG Web UI 系统，可视化文档检索与推理过程，效果还原度 95%+。
+基于 pageIndex 以ReAct范式构建的 Agentic RAG Web UI 系统，可视化文档检索与推理过程，效果还原度 90%+。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ## 结果展示
